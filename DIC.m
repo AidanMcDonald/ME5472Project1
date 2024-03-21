@@ -7,6 +7,7 @@ load('rotation_data.mat')
 
 gridX = linspace(50, 325, 10);
 gridY = linspace(50, 325, 10);
+displacementsList = [];
 for i=1:length(gridX)
     for j=1:length(gridY)
 
@@ -37,9 +38,51 @@ for i=1:length(gridX)
         ref = insertShape(ref,'Rectangle',rectangleRef,'LineWidth',1,'Color',[1,0,0]);
         cur = insertShape(cur,'Rectangle',rectangleCur,'LineWidth',1,'Color',[1,0,0]);
 
-        displacements(i,j,:) = [round(xtopleft+width/2)-round(subImageX),round(ytopleft+height/2)-round(subImageY)];
+        displacementsList = [displacementsList;[gridX(i),gridY(j),xtopleft+width/2-subImageX,ytopleft+height/2-subImageY]];
+        %I want the x coordinates to be along the horizontal dimension i.e.
+        % columns
+        displacementsMatrix(j,i,:) = [xtopleft+width/2-subImageX,ytopleft+height/2-subImageY];
 
     end
 end
 
-montage({ref, cur})
+%% Plot images with regions
+figure();
+tiledlayout(1,2);
+nexttile
+imshow(ref)
+title("Subregions in reference image")
+nexttile
+imshow(cur)
+title("Subregions in deformed image")
+
+%% Scatterplot of displacements
+% Multiply y by -1 since image starts in the upper left
+figure();
+scatter(displacementsList(:,1),-displacementsList(:,2)+size(ref,2), 40, 'red')
+hold on;
+scatter(displacementsList(:,1)+displacementsList(:,3), -displacementsList(:,2)-displacementsList(:,4)+size(ref,2), 40, 'green')
+hold off;
+xlim([0,size(ref,1)])
+ylim([0,size(ref,2)])
+title("Grid displacement")
+xlabel("x (pixels)")
+ylabel("y (pixels)")
+
+%% Countour plots of displacements
+figure();
+tiledlayout(1,2);
+nexttile
+contourf(gridX, -gridY+size(ref,2), displacementsMatrix(:,:,1), "ShowText",true)
+xlim([0,size(ref,1)])
+ylim([0,size(ref,2)])
+title("x displacement")
+xlabel("x (pixels)")
+ylabel("y (pixels)")
+nexttile
+contourf(gridX, -gridY+size(ref,2), displacementsMatrix(:,:,2), "ShowText",true)
+xlim([0,size(ref,1)])
+ylim([0,size(ref,2)])
+title("y displacement")
+xlabel("x (pixels)")
+ylabel("y (pixels)")
