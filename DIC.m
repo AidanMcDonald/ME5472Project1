@@ -5,8 +5,10 @@ clc;
 load('rotation_data.mat')
 %cur = ref;
 
-gridX = linspace(50, 325, 10);
-gridY = linspace(50, 325, 10);
+
+%% Get displacements with normxcorr2
+gridX = linspace(50, 325, 20);
+gridY = linspace(50, 325, 20);
 displacementsList = [];
 for i=1:length(gridX)
     for j=1:length(gridY)
@@ -32,17 +34,31 @@ for i=1:length(gridX)
         [ypeak,xpeak] = find(c==max(c(:)));
         ytopleft = ypeak-size(refSubimage,1)+curSubImageTopLeftY;
         xtopleft = xpeak-size(refSubimage,2)+curSubImageTopLeftX;
-        
+
         rectangleCur = [xtopleft,ytopleft,width,height];
         rectangleRef = [refSubImageTopLeftX,refSubImageTopLeftY,width,height];
         ref = insertShape(ref,'Rectangle',rectangleRef,'LineWidth',1,'Color',[1,0,0]);
         cur = insertShape(cur,'Rectangle',rectangleCur,'LineWidth',1,'Color',[1,0,0]);
 
         displacementsList = [displacementsList;[gridX(i),gridY(j),xtopleft+width/2-subImageX,ytopleft+height/2-subImageY]];
-        %I want the x coordinates to be along the horizontal dimension i.e.
+        % I want the x coordinates to be along the horizontal dimension i.e.
         % columns
-        displacementsMatrix(j,i,:) = [xtopleft+width/2-subImageX,ytopleft+height/2-subImageY];
+        displacementsMatrix1(j,i,:) = [xtopleft+width/2-subImageX,ytopleft+height/2-subImageY];
+    end
+end
 
+%% Tune displacements with cpcorr
+movingPoints = [displacementsList(:,1)+displacementsList(:,3),displacementsList(:,2)+displacementsList(:,4)];
+fixedPoints = [displacementsList(:,1),displacementsList(:,2)];
+newPoints = cpcorr(movingPoints, fixedPoints, cur(:,:,1), ref(:,:,1));
+displacementsList(:,3) = newPoints(:,1)-displacementsList(:,1);
+displacementsList(:,4) = newPoints(:,2)-displacementsList(:,2);
+
+k = 1;
+for i=1:length(gridX)
+    for j=1:length(gridY)
+       displacementsMatrix(j,i,:) = [displacementsList(k,3:4)];
+       k=k+1;
     end
 end
 
@@ -80,7 +96,7 @@ title("x displacement")
 xlabel("x (pixels)")
 ylabel("y (pixels)")
 nexttile
-contourf(gridX, -gridY+size(ref,2), displacementsMatrix(:,:,2), "ShowText",true)
+contourf(gridX, -gridY+size(ref,2), -displacementsMatrix(:,:,2), "ShowText",true)
 xlim([0,size(ref,1)])
 ylim([0,size(ref,2)])
 title("y displacement")
