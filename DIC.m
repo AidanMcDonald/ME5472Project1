@@ -2,13 +2,14 @@ clear;
 close all;
 clc;
 
-load('rotation_data.mat')
+load('translation_data.mat')
 %cur = ref;
 
 
 %% Get displacements with normxcorr2
-gridX = linspace(50, 325, 20);
-gridY = linspace(50, 325, 20);
+nGridPoints = 20;
+gridX = linspace(50, 325, nGridPoints);
+gridY = linspace(50, 325, nGridPoints);
 displacementsList = [];
 for i=1:length(gridX)
     for j=1:length(gridY)
@@ -41,9 +42,6 @@ for i=1:length(gridX)
         cur = insertShape(cur,'Rectangle',rectangleCur,'LineWidth',1,'Color',[1,0,0]);
 
         displacementsList = [displacementsList;[gridX(i),gridY(j),xtopleft+width/2-subImageX,ytopleft+height/2-subImageY]];
-        % I want the x coordinates to be along the horizontal dimension i.e.
-        % columns
-        displacementsMatrix1(j,i,:) = [xtopleft+width/2-subImageX,ytopleft+height/2-subImageY];
     end
 end
 
@@ -61,6 +59,10 @@ for i=1:length(gridX)
        k=k+1;
     end
 end
+
+%% Smooth displacement matrix
+displacementsMatrix(:,:,1) = smooth2a(displacementsMatrix(:,:,1), 1);
+displacementsMatrix(:,:,2) = smooth2a(displacementsMatrix(:,:,2), 1);
 
 %% Plot images with regions
 figure();
@@ -102,3 +104,21 @@ ylim([0,size(ref,2)])
 title("y displacement")
 xlabel("x (pixels)")
 ylabel("y (pixels)")
+
+%% Calculate F and strain measures
+[uxx,uxy] = gradient(displacementsMatrix(:,:,1),gridX(2)-gridX(1),gridY(2)-gridY(1));
+[uyx,uyy] = gradient(displacementsMatrix(:,:,2),gridX(2)-gridX(1),gridY(2)-gridY(1));
+% figure()
+% quiver(gridX, -gridY+size(ref,2), Fx, Fy)
+
+I = [1 0;0,1];
+for i=1:nGridPoints
+    for j=1:nGridPoints
+        F(i,j,:,:) = [uxx(i,j),uxy(i,j);uyx(i,j),uyy(i,j)]+I;
+        J(i,j) = det(F(i,j));
+        E(i,j,:,:) = 1/2*(F(i,j)'*F(i,j)-I);
+        C(i,j,:,:) = F(i,j)'*F(i,j);
+        B(i,j,:,:) = F(i,j)*F(i,j)';
+        Estar(i,j,:,:) = 1/2*(I-inv(F(i,j))'*inv(F(i,j)));
+    end
+end
