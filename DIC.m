@@ -2,9 +2,22 @@ clear;
 close all;
 clc;
 
-load('translation_data.mat')
-%cur = ref;
+load('rotation_data.mat')
 
+cur = ref;
+% cur = imrotate(cur, 3);
+% cur = cur(round(size(cur)/2)-188:round(size(cur)/2)+187,round(size(cur)/2)-188:round(size(cur)/2)+187);
+% 
+% cur = imresize(cur,1.15);
+% cur = cur(round(size(cur)/2)-188:round(size(cur)/2)+187,round(size(cur)/2)-188:round(size(cur)/2)+187);
+
+Fxx = 1;
+Fxy = 0.05;
+Fyx = .05;
+Fyy = 1;
+tform = affine2d([Fxx Fxy 0; Fyx Fyy 0; 0 0 1]);
+cur = imwarp(ref,tform);
+% cur = cur(round(size(cur)/2)-188:round(size(cur)/2)+187,round(size(cur)/2)-188:round(size(cur)/2)+187);
 
 %% Get displacements with normxcorr2
 nGridPoints = 20;
@@ -13,12 +26,12 @@ gridY = linspace(50, 325, nGridPoints);
 displacementsList = [];
 for i=1:length(gridX)
     for j=1:length(gridY)
-
+        gridCoords(i,j,:) = [gridX(i), gridY(j)];
         subImageX = gridX(i);
         subImageY = gridY(j);
         width = 10;
         height = 10;
-        curSubimageBuffer = 20;
+        curSubimageBuffer = 30;
 
         refSubImageTopLeftY = round(subImageY-height/2);
         refSubImageTopLeftX = round(subImageX-width/2);
@@ -31,6 +44,7 @@ for i=1:length(gridX)
         curSubImageBottomRightY = round(subImageY+height/2+curSubimageBuffer);
         curSubImageBottomRightX = round(subImageX+width/2+curSubimageBuffer);
         curSubimage = cur(curSubImageTopLeftY:curSubImageBottomRightY, curSubImageTopLeftX:curSubImageBottomRightX,1);
+        
         c = normxcorr2(refSubimage, curSubimage);        
         [ypeak,xpeak] = find(c==max(c(:)));
         ytopleft = ypeak-size(refSubimage,1)+curSubImageTopLeftY;
@@ -41,7 +55,7 @@ for i=1:length(gridX)
         ref = insertShape(ref,'Rectangle',rectangleRef,'LineWidth',1,'Color',[1,0,0]);
         cur = insertShape(cur,'Rectangle',rectangleCur,'LineWidth',1,'Color',[1,0,0]);
 
-        displacementsList = [displacementsList;[gridX(i),gridY(j),xtopleft+width/2-subImageX,ytopleft+height/2-subImageY]];
+        displacementsList = [displacementsList;[subImageX,subImageY,xtopleft+width/2-subImageX,ytopleft+height/2-subImageY]];
     end
 end
 
@@ -114,11 +128,21 @@ ylabel("y (pixels)")
 I = [1 0;0,1];
 for i=1:nGridPoints
     for j=1:nGridPoints
-        F(i,j,:,:) = [uxx(i,j),uxy(i,j);uyx(i,j),uyy(i,j)]+I;
-        J(i,j) = det(F(i,j));
-        E(i,j,:,:) = 1/2*(F(i,j)'*F(i,j)-I);
-        C(i,j,:,:) = F(i,j)'*F(i,j);
-        B(i,j,:,:) = F(i,j)*F(i,j)';
-        Estar(i,j,:,:) = 1/2*(I-inv(F(i,j))'*inv(F(i,j)));
+        gradientu(i,j,:,:) = [uxx(i,j),uxy(i,j);uyx(i,j),uyy(i,j)];
+        F(i,j,:,:) = reshape(gradientu(i,j,:,:),[2,2])+I;
+        F_local = reshape(F(i,j,:,:),[2,2]);
+        [R_local,U_local,V_local] = poldecomp(F_local);
+        R(i,j,:,:) = R_local;
+        U(i,j,:,:) = U_local;
+        V(i,j,:,:) = V_local;
+        J(i,j) = det(F_local);
+        E(i,j,:,:) = 1/2*(F_local'*F_local-I);
+        C(i,j,:,:) = F_local'*F_local;
+        B(i,j,:,:) = F_local*F_local';
+        Estar(i,j,:,:) = 1/2*(I-inv(F_local)'*inv(F_local));
+        epsilon(i,j,:,:) = 1/2*(reshape(gradientu(i,j,:,:),[2,2])+reshape(gradientu(i,j,:,:),[2,2])');
+        
     end
 end
+
+plotPrincipalComponents(epsilon, gridCoords)
