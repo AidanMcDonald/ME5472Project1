@@ -10,52 +10,63 @@ load('rotation_data.mat')
 % cur = imresize(cur,1.15);
 % cur = cur(round(size(cur)/2)-188:round(size(cur)/2)+187,round(size(cur)/2)-188:round(size(cur)/2)+187);
 
-Fxx = 1.04;
-Fxy = -0.05;
-Fyx = -.01;
-Fyy = .96;
-tform = affine2d([Fxx Fxy 0; Fyx Fyy 0; 0 0 1]);
-cur = imwarp(ref,tform);
+% Fxx = 1.01;
+% Fxy = -0.05;
+% Fyx = -.001;
+% Fyy = .99;
+% tform = affine2d([Fxx Fxy 0; Fyx Fyy 0; 0 0 1]);
+% cur = imwarp(ref,tform);
 % cur = cur(round(size(cur)/2)-188:round(size(cur)/2)+187,round(size(cur)/2)-188:round(size(cur)/2)+187);
 
-%% Get displacements with normxcorr2
-nGridPoints = 15;
-gridX = linspace(50, 325, nGridPoints);
-gridY = linspace(50, 325, nGridPoints);
-displacementsList = [];
-for i=1:length(gridX)
-    for j=1:length(gridY)
-        gridCoords(i,j,:) = [gridX(i), gridY(j)];
-        subImageX = gridX(i);
-        subImageY = gridY(j);
-        width = 10;
-        height = 10;
-        curSubimageBuffer = 39;
+%% Create unstructured grid
+candidateGridDimensionX = 15;
+candidateGridDimensionY = 15;
+candidateGridX = round(linspace(1, size(ref,1), candidateGridDimensionX));
+candidateGridY = round(linspace(1, size(ref,2), candidateGridDimensionY));
 
-        refSubImageTopLeftY = round(subImageY-height/2);
-        refSubImageTopLeftX = round(subImageX-width/2);
-        refSubImageBottomRightY = round(subImageY+height/2);
-        refSubImageBottomRightX = round(subImageX+width/2);
-        refSubimage = ref(refSubImageTopLeftY:refSubImageBottomRightY, refSubImageTopLeftX:refSubImageBottomRightX,1);
-        
-        curSubImageTopLeftY = round(subImageY-height/2-curSubimageBuffer);
-        curSubImageTopLeftX = round(subImageX-width/2-curSubimageBuffer);
-        curSubImageBottomRightY = round(subImageY+height/2+curSubimageBuffer);
-        curSubImageBottomRightX = round(subImageX+width/2+curSubimageBuffer);
-        curSubimage = cur(curSubImageTopLeftY:curSubImageBottomRightY, curSubImageTopLeftX:curSubImageBottomRightX,1);
-        
-        c = normxcorr2(refSubimage, curSubimage);        
-        [ypeak,xpeak] = find(c==max(c(:)));
-        ytopleft = ypeak-size(refSubimage,1)+curSubImageTopLeftY;
-        xtopleft = xpeak-size(refSubimage,2)+curSubImageTopLeftX;
-
-        rectangleCur = [xtopleft,ytopleft,width,height];
-        rectangleRef = [refSubImageTopLeftX,refSubImageTopLeftY,width,height];
-        ref = insertShape(ref,'Rectangle',rectangleRef,'LineWidth',1,'Color',[1,0,0]);
-        cur = insertShape(cur,'Rectangle',rectangleCur,'LineWidth',1,'Color',[1,0,0]);
-
-        displacementsList = [displacementsList;[subImageX,subImageY,xtopleft+width/2-subImageX,ytopleft+height/2-subImageY]];
+grid = [];
+for i=1:length(candidateGridX)
+    for j=1:length(candidateGridY)
+        if ref(candidateGridX(i),candidateGridY(j))>1e-10
+            grid = [grid; [candidateGridX(i) candidateGridY(j)]];
+        end
     end
+end
+
+
+%% Get displacements with normxcorr2
+
+displacementsList = [];
+for i=1:length(grid)
+    subImageX = grid(i,1);
+    subImageY = grid(i,2);
+    width = 10;
+    height = 10;
+    curSubimageBuffer = 20;
+
+    refSubImageTopLeftY = round(subImageY-height/2);
+    refSubImageTopLeftX = round(subImageX-width/2);
+    refSubImageBottomRightY = round(subImageY+height/2);
+    refSubImageBottomRightX = round(subImageX+width/2);
+    refSubimage = ref(refSubImageTopLeftY:refSubImageBottomRightY, refSubImageTopLeftX:refSubImageBottomRightX,1);
+    
+    curSubImageTopLeftY = round(subImageY-height/2-curSubimageBuffer);
+    curSubImageTopLeftX = round(subImageX-width/2-curSubimageBuffer);
+    curSubImageBottomRightY = round(subImageY+height/2+curSubimageBuffer);
+    curSubImageBottomRightX = round(subImageX+width/2+curSubimageBuffer);
+    curSubimage = cur(curSubImageTopLeftY:curSubImageBottomRightY, curSubImageTopLeftX:curSubImageBottomRightX,1);
+    
+    c = normxcorr2(refSubimage, curSubimage);        
+    [ypeak,xpeak] = find(c==max(c(:)));
+    ytopleft = ypeak-size(refSubimage,1)+curSubImageTopLeftY;
+    xtopleft = xpeak-size(refSubimage,2)+curSubImageTopLeftX;
+
+    rectangleCur = [xtopleft,ytopleft,width,height];
+    rectangleRef = [refSubImageTopLeftX,refSubImageTopLeftY,width,height];
+    ref = insertShape(ref,'Rectangle',rectangleRef,'LineWidth',1,'Color',[1,0,0]);
+    cur = insertShape(cur,'Rectangle',rectangleCur,'LineWidth',1,'Color',[1,0,0]);
+
+    displacementsList = [displacementsList;[subImageX,subImageY,xtopleft+width/2-subImageX,ytopleft+height/2-subImageY]];
 end
 
 %% Tune displacements with cpcorr
@@ -64,6 +75,9 @@ fixedPoints = [displacementsList(:,1),displacementsList(:,2)];
 newPoints = cpcorr(movingPoints, fixedPoints, cur(:,:,1), ref(:,:,1));
 displacementsList(:,3) = newPoints(:,1)-displacementsList(:,1);
 displacementsList(:,4) = newPoints(:,2)-displacementsList(:,2);
+
+gridX = grid(:,1);
+gridY = grid(:,2);
 
 k = 1;
 for i=1:length(gridX)
@@ -162,5 +176,3 @@ title("\epsilonxy")
 nexttile
 contourf(gridX, -gridY+size(ref,2), smooth2a(omega(:,:,1,2),4), "ShowText",true)
 title("\omegaxy")
-
-%plotPrincipalComponents(epsilon, gridCoords)
