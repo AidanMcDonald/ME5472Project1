@@ -4,23 +4,22 @@ clc;
 
 load('rotation_data.mat')
 
-cur = ref;
 % cur = imrotate(cur, 3);
 % cur = cur(round(size(cur)/2)-188:round(size(cur)/2)+187,round(size(cur)/2)-188:round(size(cur)/2)+187);
 % 
 % cur = imresize(cur,1.15);
 % cur = cur(round(size(cur)/2)-188:round(size(cur)/2)+187,round(size(cur)/2)-188:round(size(cur)/2)+187);
 
-Fxx = 1;
-Fxy = 0.05;
-Fyx = .05;
-Fyy = 1;
+Fxx = 1.04;
+Fxy = -0.05;
+Fyx = -.01;
+Fyy = .96;
 tform = affine2d([Fxx Fxy 0; Fyx Fyy 0; 0 0 1]);
 cur = imwarp(ref,tform);
 % cur = cur(round(size(cur)/2)-188:round(size(cur)/2)+187,round(size(cur)/2)-188:round(size(cur)/2)+187);
 
 %% Get displacements with normxcorr2
-nGridPoints = 20;
+nGridPoints = 15;
 gridX = linspace(50, 325, nGridPoints);
 gridY = linspace(50, 325, nGridPoints);
 displacementsList = [];
@@ -31,7 +30,7 @@ for i=1:length(gridX)
         subImageY = gridY(j);
         width = 10;
         height = 10;
-        curSubimageBuffer = 30;
+        curSubimageBuffer = 39;
 
         refSubImageTopLeftY = round(subImageY-height/2);
         refSubImageTopLeftX = round(subImageX-width/2);
@@ -75,8 +74,12 @@ for i=1:length(gridX)
 end
 
 %% Smooth displacement matrix
-displacementsMatrix(:,:,1) = smooth2a(displacementsMatrix(:,:,1), 1);
-displacementsMatrix(:,:,2) = smooth2a(displacementsMatrix(:,:,2), 1);
+%displacementsMatrix(:,:,1) = smooth2a(displacementsMatrix(:,:,1), 2);
+%displacementsMatrix(:,:,2) = smooth2a(displacementsMatrix(:,:,2), 2);
+
+%% Convert Displacements to useful units
+lambda = 1.0;  % [length unit/pixel]
+displacementsMatrix = displacementsMatrix*lambda;
 
 %% Plot images with regions
 figure();
@@ -141,8 +144,23 @@ for i=1:nGridPoints
         B(i,j,:,:) = F_local*F_local';
         Estar(i,j,:,:) = 1/2*(I-inv(F_local)'*inv(F_local));
         epsilon(i,j,:,:) = 1/2*(reshape(gradientu(i,j,:,:),[2,2])+reshape(gradientu(i,j,:,:),[2,2])');
-        
+        omega(i,j,:,:) = 1/2*(reshape(gradientu(i,j,:,:),[2,2])'-reshape(gradientu(i,j,:,:),[2,2]));
     end
 end
 
-plotPrincipalComponents(epsilon, gridCoords)
+figure()
+tiledlayout(2,2);
+nexttile
+contourf(gridX, -gridY+size(ref,2), smooth2a(epsilon(:,:,1,1),4), "ShowText",true)
+title("\epsilonxx")
+nexttile
+contourf(gridX, -gridY+size(ref,2), smooth2a(epsilon(:,:,2,2),4), "ShowText",true)
+title("\epsilonyy")
+nexttile
+contourf(gridX, -gridY+size(ref,2), smooth2a(epsilon(:,:,1,2),4), "ShowText",true)
+title("\epsilonxy")
+nexttile
+contourf(gridX, -gridY+size(ref,2), smooth2a(omega(:,:,1,2),4), "ShowText",true)
+title("\omegaxy")
+
+%plotPrincipalComponents(epsilon, gridCoords)
