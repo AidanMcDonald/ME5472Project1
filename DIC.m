@@ -10,24 +10,24 @@ load('rotation_data.mat')
 % cur = imresize(cur,1.15);
 % cur = cur(round(size(cur)/2)-188:round(size(cur)/2)+187,round(size(cur)/2)-188:round(size(cur)/2)+187);
 
-% Fxx = 1.01;
-% Fxy = -0.05;
-% Fyx = -.001;
-% Fyy = .99;
-% tform = affine2d([Fxx Fxy 0; Fyx Fyy 0; 0 0 1]);
-% cur = imwarp(ref,tform);
+Fxx = 1.01;
+Fxy = -0.05;
+Fyx = -.001;
+Fyy = .99;
+tform = affine2d([Fxx Fxy 0; Fyx Fyy 0; 0 0 1]);
+cur = imwarp(ref,tform);
 % cur = cur(round(size(cur)/2)-188:round(size(cur)/2)+187,round(size(cur)/2)-188:round(size(cur)/2)+187);
 
 %% Create unstructured grid
-candidateGridDimensionX = 15;
-candidateGridDimensionY = 15;
+candidateGridDimensionX = 30;
+candidateGridDimensionY = 30;
 candidateGridX = round(linspace(1, size(ref,1), candidateGridDimensionX));
 candidateGridY = round(linspace(1, size(ref,2), candidateGridDimensionY));
 
 grid = [];
 for i=1:length(candidateGridX)
     for j=1:length(candidateGridY)
-        if ref(candidateGridX(i),candidateGridY(j))>1e-10
+        if ref(candidateGridX(i),candidateGridY(j))>1e-2
             grid = [grid; [candidateGridX(i) candidateGridY(j)]];
         end
     end
@@ -79,13 +79,14 @@ displacementsList(:,4) = newPoints(:,2)-displacementsList(:,2);
 gridX = grid(:,1);
 gridY = grid(:,2);
 
-k = 1;
-for i=1:length(gridX)
-    for j=1:length(gridY)
-       displacementsMatrix(j,i,:) = [displacementsList(k,3:4)];
-       k=k+1;
-    end
-end
+%DT = delaunayTriangulation(grid(:,1),grid(:,2));
+DT = delaunay(grid(:,1),grid(:,2));
+
+% k = 1;
+% for i=1:length(grid)
+%    displacementsMatrix(j,i,:) = [displacementsList(k,3:4)];
+%    k=k+1;
+% end
 
 %% Smooth displacement matrix
 %displacementsMatrix(:,:,1) = smooth2a(displacementsMatrix(:,:,1), 2);
@@ -93,7 +94,7 @@ end
 
 %% Convert Displacements to useful units
 lambda = 1.0;  % [length unit/pixel]
-displacementsMatrix = displacementsMatrix*lambda;
+% displacementsMatrix = displacementsMatrix*lambda;
 
 %% Plot images with regions
 figure();
@@ -122,57 +123,80 @@ ylabel("y (pixels)")
 figure();
 tiledlayout(1,2);
 nexttile
-contourf(gridX, -gridY+size(ref,2), displacementsMatrix(:,:,1), "ShowText",true)
+[~,h] = tricontf(gridX, -gridY+size(ref,2), DT, displacementsList(:,3));
+set(h,'edgecolor','none');
+colorbar
 xlim([0,size(ref,1)])
 ylim([0,size(ref,2)])
 title("x displacement")
 xlabel("x (pixels)")
 ylabel("y (pixels)")
 nexttile
-contourf(gridX, -gridY+size(ref,2), -displacementsMatrix(:,:,2), "ShowText",true)
+[~,h] = tricontf(gridX, -gridY+size(ref,2), DT, -displacementsList(:,2));
+set(h,'edgecolor','none');
+colorbar
 xlim([0,size(ref,1)])
 ylim([0,size(ref,2)])
 title("y displacement")
 xlabel("x (pixels)")
 ylabel("y (pixels)")
 
+%% Calulate displacement gradient
+
+% For each triangle, get the displacment gradient inside it by finite
+% element interpolation
+
 %% Calculate F and strain measures
-[uxx,uxy] = gradient(displacementsMatrix(:,:,1),gridX(2)-gridX(1),gridY(2)-gridY(1));
-[uyx,uyy] = gradient(displacementsMatrix(:,:,2),gridX(2)-gridX(1),gridY(2)-gridY(1));
+[uxx,uxy] = trigradient(displacementsList(:,1),displacementsList(:,2),displacementsList(:,3),DT);
+[uyx,uyy] = trigradient(displacementsList(:,1),displacementsList(:,2),displacementsList(:,4),DT);
 % figure()
 % quiver(gridX, -gridY+size(ref,2), Fx, Fy)
 
 I = [1 0;0,1];
-for i=1:nGridPoints
-    for j=1:nGridPoints
-        gradientu(i,j,:,:) = [uxx(i,j),uxy(i,j);uyx(i,j),uyy(i,j)];
-        F(i,j,:,:) = reshape(gradientu(i,j,:,:),[2,2])+I;
-        F_local = reshape(F(i,j,:,:),[2,2]);
-        [R_local,U_local,V_local] = poldecomp(F_local);
-        R(i,j,:,:) = R_local;
-        U(i,j,:,:) = U_local;
-        V(i,j,:,:) = V_local;
-        J(i,j) = det(F_local);
-        E(i,j,:,:) = 1/2*(F_local'*F_local-I);
-        C(i,j,:,:) = F_local'*F_local;
-        B(i,j,:,:) = F_local*F_local';
-        Estar(i,j,:,:) = 1/2*(I-inv(F_local)'*inv(F_local));
-        epsilon(i,j,:,:) = 1/2*(reshape(gradientu(i,j,:,:),[2,2])+reshape(gradientu(i,j,:,:),[2,2])');
-        omega(i,j,:,:) = 1/2*(reshape(gradientu(i,j,:,:),[2,2])'-reshape(gradientu(i,j,:,:),[2,2]));
-    end
+for i=1:size(grid,1)
+    gradientu(i,:,:) = [uxx(i),uxy(i);uyx(i),uyy(i)];
+    F(i,:,:) = reshape(gradientu(i,:,:),[2,2])+I;
+    F_local = reshape(F(i,:,:),[2,2]);
+    [R_local,U_local,V_local] = poldecomp(F_local);
+    R(i,:,:) = R_local;
+    U(i,:,:) = U_local;
+    V(i,:,:) = V_local;
+    J(i) = det(F_local);
+    E(i,:,:) = 1/2*(F_local'*F_local-I);
+    C(i,:,:) = F_local'*F_local;
+    B(i,:,:) = F_local*F_local';
+    Estar(i,:,:) = 1/2*(I-inv(F_local)'*inv(F_local));
+    epsilon(i,:,:) = 1/2*(reshape(gradientu(i,:,:),[2,2])+reshape(gradientu(i,:,:),[2,2])');
+    omega(i,:,:) = 1/2*(reshape(gradientu(i,:,:),[2,2])'-reshape(gradientu(i,:,:),[2,2]));
 end
 
 figure()
 tiledlayout(2,2);
 nexttile
-contourf(gridX, -gridY+size(ref,2), smooth2a(epsilon(:,:,1,1),4), "ShowText",true)
+[~,h] = tricontf(gridX, -gridY+size(ref,2), DT, epsilon(:,1,1));
+set(h,'edgecolor','none');
+colorbar
 title("\epsilonxx")
+xlim([0,size(ref,1)])
+ylim([0,size(ref,2)])
 nexttile
-contourf(gridX, -gridY+size(ref,2), smooth2a(epsilon(:,:,2,2),4), "ShowText",true)
+[~,h] = tricontf(gridX, -gridY+size(ref,2), DT, epsilon(:,2,2));
+set(h,'edgecolor','none');
+colorbar
 title("\epsilonyy")
+xlim([0,size(ref,1)])
+ylim([0,size(ref,2)])
 nexttile
-contourf(gridX, -gridY+size(ref,2), smooth2a(epsilon(:,:,1,2),4), "ShowText",true)
+[~,h] = tricontf(gridX, -gridY+size(ref,2), DT, epsilon(:,1,2));
+set(h,'edgecolor','none');
+colorbar
 title("\epsilonxy")
+xlim([0,size(ref,1)])
+ylim([0,size(ref,2)])
 nexttile
-contourf(gridX, -gridY+size(ref,2), smooth2a(omega(:,:,1,2),4), "ShowText",true)
+[~,h] = tricontf(gridX, -gridY+size(ref,2), DT, omega(:,1,2));
+set(h,'edgecolor','none');
+colorbar
 title("\omegaxy")
+xlim([0,size(ref,1)])
+ylim([0,size(ref,2)])
