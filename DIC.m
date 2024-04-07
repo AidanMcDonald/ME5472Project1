@@ -2,75 +2,149 @@ clear;
 close all;
 clc;
 
-
 %% Load input files
-filedirectory = 'Hole_Plate_Images';
-filename = 'ohtcfrp_';
-ref = read(Tiff(strcat(filedirectory,'/',filename,'01','.tif')));
-ref = double(ref)/256.;
-cur = read(Tiff(strcat(filedirectory,'/',filename,'11','.tif')));
-cur = double(cur)/256.;
 
+Case = 'hole';
 
-%load('rotation_data.mat')
-
-% cur = imrotate(cur, 3);
-% cur = cur(round(size(cur)/2)-188:round(size(cur)/2)+187,round(size(cur)/2)-188:round(size(cur)/2)+187);
-% 
-% cur = imresize(cur,1.15);
-% cur = cur(round(size(cur)/2)-188:round(size(cur)/2)+187,round(size(cur)/2)-188:round(size(cur)/2)+187);
-% 
-% Fxx = 1.01;
-% Fxy = -0.05;
-% Fyx = -.001;
-% Fyy = .99;
-% tform = affine2d([Fxx Fxy 0; Fyx Fyy 0; 0 0 1]);
-% cur = imwarp(ref,tform);
-% cur = cur(round(size(cur)/2)-188:round(size(cur)/2)+187,round(size(cur)/2)-188:round(size(cur)/2)+187);
+if strcmp(Case,'crack')
+    filedirectory = 'Crack_Images';
+    ref = imread(strcat(filedirectory,'/ref.TIF'));
+    ref = double(ref);
+    maxref = max(max(ref));
+    ref = ref/maxref;
+    cur = imread(strcat(filedirectory,'/cur.TIF'));
+    cur = double(cur);
+    cur = cur/maxref;
+    gridType = 'rectangular';
+    candidateGridDimensionX = 20;
+    candidateGridDimensionY = 20;
+    width = 60;
+    height = 60;
+    curSubimageBuffer = 300;
+    imageEdgeBuffer = 400;
+    smoothingIterations
+elseif strcmp(Case,'hole')
+    filedirectory = 'Hole_Plate_Images';
+    filename = 'ohtcfrp_';
+    ref = read(Tiff(strcat(filedirectory,'/',filename,'01','.tif')));
+    ref = double(ref)/256.;
+    cur = read(Tiff(strcat(filedirectory,'/',filename,'11','.tif')));
+    cur = double(cur)/256.;
+    gridType = 'rectangular';
+    candidateGridDimensionX = 20;
+    candidateGridDimensionY = 40;
+    width = 20;
+    height = 20;
+    curSubimageBuffer = 20;
+    imageEdgeBuffer = 75;
+elseif strcmp(Case,'holeRandomGrid')
+    filedirectory = 'Hole_Plate_Images';
+    filename = 'ohtcfrp_';
+    ref = read(Tiff(strcat(filedirectory,'/',filename,'01','.tif')));
+    ref = double(ref)/256.;
+    cur = read(Tiff(strcat(filedirectory,'/',filename,'11','.tif')));
+    cur = double(cur)/256.;
+    gridType = 'random';
+    candidateGridSize = 800;
+    width = 20;
+    height = 20;
+    curSubimageBuffer = 20;
+    imageEdgeBuffer = 75;
+elseif strcmp(Case,'rotation')
+    load('rotation_data.mat')
+    candidateGridDimensionX = 10;
+    candidateGridDimensionY = 10;
+    gridType = 'rectangular';
+    width = 20;
+    height = 20;
+    curSubimageBuffer = 20;
+    imageEdgeBuffer = 75;
+elseif strcmp(Case, 'arbitraryF')
+    load('rotation_data.mat')
+    Fxx = 1.01;
+    Fxy = -0.05;
+    Fyx = -.001;
+    Fyy = .99;
+    tform = affine2d([Fxx Fxy 0; Fyx Fyy 0; 0 0 1]);
+    cur = imwarp(ref,tform);
+    gridType = 'rectangular';
+    candidateGridDimensionX = 10;
+    candidateGridDimensionY = 10;
+    width = 20;
+    height = 20;
+    curSubimageBuffer = 20;
+    imageEdgeBuffer = 75;
+elseif strcmp(Case, 'translation')
+    load('translation_data.mat')
+    candidateGridDimensionX = 10;
+    candidateGridDimensionY = 10;
+    gridType = 'rectangular';
+    width = 20;
+    height = 20;
+    curSubimageBuffer = 20;
+    imageEdgeBuffer = 75;
+else
+    error("Invalid case string")
+end
 
 %% Create unstructured grid
 backgroundIntensityCutoff = .1;
 
-% candidateGridSize = 1000;
-% buffer = 30;
-% 
-% candidateGridX = round((size(ref,2)-2*buffer)*rand(candidateGridSize,1)+buffer);
-% candidateGridY = round((size(ref,1)-2*buffer)*rand(candidateGridSize,1)+buffer);
-% grid = [];
-% for i=1:candidateGridSize
-%     if ref(candidateGridY(i),candidateGridX(i))>backgroundIntensityCutoff
-%         grid = [grid; [candidateGridX(i) candidateGridY(i)]];
-%     end
-% end
+if strcmp(gridType,'random') 
+    % Generate random x and y coordinates on the image
+    buffer = 41;
+    candidateGridX = round((size(ref,2)-2*buffer)*rand(candidateGridSize,1)+buffer);
+    candidateGridY = round((size(ref,1)-2*buffer)*rand(candidateGridSize,1)+buffer);
+    % Discard points in the background
+    grid = [];
+    for i=1:candidateGridSize
+        if ref(candidateGridY(i),candidateGridX(i))>backgroundIntensityCutoff
+            grid = [grid; [candidateGridX(i) candidateGridY(i)]];
+        end
+    end
+    % Discard duplicates
+    grid = unique(grid,'rows');
+end
 
-
-candidateGridDimensionX = 30;
-candidateGridDimensionY = 50;
-%candidateGridX = round(linspace(1, size(ref,2), candidateGridDimensionX));
-%candidateGridY = round(linspace(1, size(ref,1), candidateGridDimensionY));
-candidateGridX = round(linspace(75, size(ref,2)-75, candidateGridDimensionX));
-candidateGridY = round(linspace(75, size(ref,1)-75, candidateGridDimensionY));
-% candidateGridY = round(linspace(400, 640, candidateGridDimensionX));
-% candidateGridX = round(linspace(80, 320, candidateGridDimensionY));
-
-grid = [];
-for i=1:size(candidateGridY,2)
-    for j=1:size(candidateGridX,2)
-        if ref(candidateGridY(i),candidateGridX(j))>backgroundIntensityCutoff
-            grid = [grid; [candidateGridX(j) candidateGridY(i)]];
+if strcmp(gridType,'rectangular')
+    % Create rectangular grid
+    
+    candidateGridX = round(linspace(imageEdgeBuffer, size(ref,2)-imageEdgeBuffer, candidateGridDimensionX));
+    candidateGridY = round(linspace(imageEdgeBuffer, size(ref,1)-imageEdgeBuffer, candidateGridDimensionY));
+    % Discard points in the background
+    grid = [];
+    for i=1:size(candidateGridY,2)
+        for j=1:size(candidateGridX,2)
+            if ref(candidateGridY(i),candidateGridX(j))>backgroundIntensityCutoff
+                grid = [grid; [candidateGridX(j) candidateGridY(i)]];
+            end
         end
     end
 end
 
+%% Get Delaunay triangulation of unstructured grid
+gridX = grid(:,1);
+gridY = grid(:,2);
+DT = delaunay(grid(:,1),grid(:,2));
+
+%Get rid of triangles whose centroids are background
+trianglesToRemove = [];
+for i = 1:size(DT,1)
+    triangle = DT(i,:);
+    centroid = round([(grid(triangle(1),1)+grid(triangle(2),1)+grid(triangle(3),1))/3,(grid(triangle(1),2)+grid(triangle(2),2)+grid(triangle(3),2))/3]);
+    if ref(centroid(2),centroid(1))<backgroundIntensityCutoff
+        trianglesToRemove = [trianglesToRemove; i];
+    end
+end
+for i = 1:size(trianglesToRemove)
+    DT(trianglesToRemove(end+1-i),:)=[];
+end
 
 %% Get displacements with normxcorr2
 displacementsList = [];
 for i=1:length(grid)
     subImageX = grid(i,1);
     subImageY = grid(i,2);
-    width = 20;
-    height = 20;
-    curSubimageBuffer = 20;
 
     refSubImageTopLeftY = round(subImageY-height/2);
     refSubImageTopLeftX = round(subImageX-width/2);
@@ -104,38 +178,9 @@ newPoints = cpcorr(movingPoints, fixedPoints, cur(:,:,1), ref(:,:,1));
 displacementsList(:,3) = newPoints(:,1)-displacementsList(:,1);
 displacementsList(:,4) = newPoints(:,2)-displacementsList(:,2);
 
-gridX = grid(:,1);
-gridY = grid(:,2);
-
-%DT = delaunayTriangulation(grid(:,1),grid(:,2));
-DT = delaunay(grid(:,1),grid(:,2));
-
-%Get rid of triangles whose centroids are background
-trianglesToRemove = [];
-for i = 1:size(DT,1)
-    triangle = DT(i,:);
-    centroid = round([(grid(triangle(1),1)+grid(triangle(2),1)+grid(triangle(3),1))/3,(grid(triangle(1),2)+grid(triangle(2),2)+grid(triangle(3),2))/3]);
-    if ref(centroid(2),centroid(1))<backgroundIntensityCutoff
-        trianglesToRemove = [trianglesToRemove; i];
-    end
-end
-for i = 1:size(trianglesToRemove)
-    DT(trianglesToRemove(end+1-i),:)=[];
-end
-
-% k = 1;
-% for i=1:length(grid)
-%    displacementsMatrix(j,i,:) = [displacementsList(k,3:4)];
-%    k=k+1;
-% end
-
-%% Smooth displacement matrix
-%displacementsMatrix(:,:,1) = smooth2a(displacementsMatrix(:,:,1), 2);
-%displacementsMatrix(:,:,2) = smooth2a(displacementsMatrix(:,:,2), 2);
-
 %% Convert Displacements to useful units
 lambda = 1.0;  % [length unit/pixel]
-% displacementsMatrix = displacementsMatrix*lambda;
+displacementsList = displacementsList*lambda;
 
 %% Plot images with regions
 figure();
@@ -162,9 +207,12 @@ ylabel("y (pixels)")
 
 %% Countour plots of displacements
 figure();
+colormap jet;
 tiledlayout(1,2);
 nexttile
-[~,h] = tricontf(gridX, -gridY+size(ref,1), DT, displacementsList(:,3));
+sm = surfaceMesh([gridX, -gridY+size(ref,1), displacementsList(:,3)],DT);
+smOut = smoothSurfaceMesh(sm,10,Method="Laplacian",ScaleFactor=.5);
+[~,h] = tricontf(gridX, -gridY+size(ref,1), double(smOut.Faces), smOut.Vertices(:,3));
 set(h,'edgecolor','none');
 colorbar
 xlim([0,size(ref,2)])
@@ -173,7 +221,9 @@ title("x displacement")
 xlabel("x (pixels)")
 ylabel("y (pixels)")
 nexttile
-[~,h] = tricontf(gridX, -gridY+size(ref,1), DT, -displacementsList(:,4));
+sm = surfaceMesh([gridX, -gridY+size(ref,1), displacementsList(:,4)],DT);
+smOut = smoothSurfaceMesh(sm,10,Method="Laplacian",ScaleFactor=.5);
+[~,h] = tricontf(gridX, -gridY+size(ref,1), double(smOut.Faces), smOut.Vertices(:,3));
 set(h,'edgecolor','none');
 colorbar
 xlim([0,size(ref,2)])
@@ -182,16 +232,9 @@ title("y displacement")
 xlabel("x (pixels)")
 ylabel("y (pixels)")
 
-%% Calulate displacement gradient
-
-% For each triangle, get the displacment gradient inside it by finite
-% element interpolation
-
 %% Calculate F and strain measures
 [uxx,uxy] = trigradient(displacementsList(:,1),displacementsList(:,2),displacementsList(:,3),DT);
 [uyx,uyy] = trigradient(displacementsList(:,1),displacementsList(:,2),displacementsList(:,4),DT);
-% figure()
-% quiver(gridX, -gridY+size(ref,2), Fx, Fy)
 
 I = [1 0;0,1];
 for i=1:size(grid,1)
@@ -211,31 +254,41 @@ for i=1:size(grid,1)
     omega(i,:,:) = 1/2*(reshape(gradientu(i,:,:),[2,2])'-reshape(gradientu(i,:,:),[2,2]));
 end
 
+%% Plot infinitesimal strain epsilon and infinitesimal rotation omega
 figure()
+colormap jet;
 tiledlayout(2,2);
 nexttile
-[~,h] = tricontf(gridX, -gridY+size(ref,1), DT, epsilon(:,1,1));
+sm = surfaceMesh([gridX, -gridY+size(ref,1), epsilon(:,1,1)],DT);
+smOut = smoothSurfaceMesh(sm,10,Method="Laplacian",ScaleFactor=.5);
+[~,h] = tricontf(gridX, -gridY+size(ref,1), double(smOut.Faces), smOut.Vertices(:,3));
 set(h,'edgecolor','none');
 colorbar
 title("\epsilonxx")
 xlim([0,size(ref,2)])
 ylim([0,size(ref,1)])
 nexttile
-[~,h] = tricontf(gridX, -gridY+size(ref,1), DT, epsilon(:,2,2));
+sm = surfaceMesh([gridX, -gridY+size(ref,1), epsilon(:,2,2)],DT);
+smOut = smoothSurfaceMesh(sm,10,Method="Laplacian",ScaleFactor=.5);
+[~,h] = tricontf(gridX, -gridY+size(ref,1), double(smOut.Faces), smOut.Vertices(:,3));
 set(h,'edgecolor','none');
 colorbar
 title("\epsilonyy")
 xlim([0,size(ref,2)])
 ylim([0,size(ref,1)])
 nexttile
-[~,h] = tricontf(gridX, -gridY+size(ref,1), DT, epsilon(:,1,2));
+sm = surfaceMesh([gridX, -gridY+size(ref,1), epsilon(:,1,2)],DT);
+smOut = smoothSurfaceMesh(sm,10,Method="Laplacian",ScaleFactor=.5);
+[~,h] = tricontf(gridX, -gridY+size(ref,1), double(smOut.Faces), smOut.Vertices(:,3));
 set(h,'edgecolor','none');
 colorbar
 title("\epsilonxy")
 xlim([0,size(ref,2)])
 ylim([0,size(ref,1)])
 nexttile
-[~,h] = tricontf(gridX, -gridY+size(ref,1), DT, omega(:,1,2));
+sm = surfaceMesh([gridX, -gridY+size(ref,1), omega(:,1,2)],DT);
+smOut = smoothSurfaceMesh(sm,10,Method="Laplacian",ScaleFactor=.5);
+[~,h] = tricontf(gridX, -gridY+size(ref,1), double(smOut.Faces), smOut.Vertices(:,3));
 set(h,'edgecolor','none');
 colorbar
 title("\omegaxy")
