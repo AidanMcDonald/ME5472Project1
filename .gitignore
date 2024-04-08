@@ -1,2 +1,6 @@
 *.asv
-tridemo.m
+*.odg
+*.odt
+*.odg#
+*.odt#
+.gitignore

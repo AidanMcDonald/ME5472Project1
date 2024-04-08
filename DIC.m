@@ -1,10 +1,24 @@
+% Aidan McDonald
+% ME5472
+% Project 1: Digital Image Correlation
+
 clear;
 close all;
 clc;
 
-%% Load input files
+%% Case selection and input files
 
-Case = 'hole';
+% Case options are:
+% 'translation'   : simple translation case
+% 'rotation'      : simple rotation case
+% 'arbitraryF'    : warps the simple rotation case reference image by a
+%                   prescribed F to test if the same F is returned
+% 'hole'          : hole plate sample case with rectangular grid
+% 'holeRandomGrid': same as 'hole', but using grid of randomly selected 
+%                   points
+% 'crack'         : Cracked plate sample case
+
+Case = 'rotation';
 
 if strcmp(Case,'crack')
     filedirectory = 'Crack_Images';
@@ -233,8 +247,8 @@ xlabel("x (pixels)")
 ylabel("y (pixels)")
 
 %% Calculate F and strain measures
-[uxx,uxy] = trigradient(displacementsList(:,1),displacementsList(:,2),displacementsList(:,3),DT);
-[uyx,uyy] = trigradient(displacementsList(:,1),displacementsList(:,2),displacementsList(:,4),DT);
+[uxx,uyx] = trigradient(displacementsList(:,1),displacementsList(:,2),displacementsList(:,3),DT);
+[uxy,uyy] = trigradient(displacementsList(:,1),displacementsList(:,2),displacementsList(:,4),DT);
 
 I = [1 0;0,1];
 for i=1:size(grid,1)
@@ -251,38 +265,39 @@ for i=1:size(grid,1)
     B(i,:,:) = F_local*F_local';
     Estar(i,:,:) = 1/2*(I-inv(F_local)'*inv(F_local));
     epsilon(i,:,:) = 1/2*(reshape(gradientu(i,:,:),[2,2])+reshape(gradientu(i,:,:),[2,2])');
-    omega(i,:,:) = 1/2*(reshape(gradientu(i,:,:),[2,2])'-reshape(gradientu(i,:,:),[2,2]));
+    omega(i,:,:) = 1/2*(reshape(gradientu(i,:,:),[2,2])-reshape(gradientu(i,:,:),[2,2])');
 end
 
-%% Plot infinitesimal strain epsilon and infinitesimal rotation omega
+%% Plot Largrange strain E and infinitesimal rotation omega
+
 figure()
 colormap jet;
 tiledlayout(2,2);
 nexttile
-sm = surfaceMesh([gridX, -gridY+size(ref,1), epsilon(:,1,1)],DT);
+sm = surfaceMesh([gridX, -gridY+size(ref,1), E(:,1,1)],DT);
 smOut = smoothSurfaceMesh(sm,10,Method="Laplacian",ScaleFactor=.5);
 [~,h] = tricontf(gridX, -gridY+size(ref,1), double(smOut.Faces), smOut.Vertices(:,3));
 set(h,'edgecolor','none');
 colorbar
-title("\epsilonxx")
+title("Exx")
 xlim([0,size(ref,2)])
 ylim([0,size(ref,1)])
 nexttile
-sm = surfaceMesh([gridX, -gridY+size(ref,1), epsilon(:,2,2)],DT);
+sm = surfaceMesh([gridX, -gridY+size(ref,1), E(:,2,2)],DT);
 smOut = smoothSurfaceMesh(sm,10,Method="Laplacian",ScaleFactor=.5);
 [~,h] = tricontf(gridX, -gridY+size(ref,1), double(smOut.Faces), smOut.Vertices(:,3));
 set(h,'edgecolor','none');
 colorbar
-title("\epsilonyy")
+title("Eyy")
 xlim([0,size(ref,2)])
 ylim([0,size(ref,1)])
 nexttile
-sm = surfaceMesh([gridX, -gridY+size(ref,1), epsilon(:,1,2)],DT);
+sm = surfaceMesh([gridX, -gridY+size(ref,1), E(:,1,2)],DT);
 smOut = smoothSurfaceMesh(sm,10,Method="Laplacian",ScaleFactor=.5);
 [~,h] = tricontf(gridX, -gridY+size(ref,1), double(smOut.Faces), smOut.Vertices(:,3));
 set(h,'edgecolor','none');
 colorbar
-title("\epsilonxy")
+title("Exy")
 xlim([0,size(ref,2)])
 ylim([0,size(ref,1)])
 nexttile
