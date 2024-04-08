@@ -36,7 +36,6 @@ if strcmp(Case,'crack')
     height = 60;
     curSubimageBuffer = 300;
     imageEdgeBuffer = 400;
-    smoothingIterations
 elseif strcmp(Case,'hole')
     filedirectory = 'Hole_Plate_Images';
     filename = 'ohtcfrp_';
@@ -122,7 +121,6 @@ end
 
 if strcmp(gridType,'rectangular')
     % Create rectangular grid
-    
     candidateGridX = round(linspace(imageEdgeBuffer, size(ref,2)-imageEdgeBuffer, candidateGridDimensionX));
     candidateGridY = round(linspace(imageEdgeBuffer, size(ref,1)-imageEdgeBuffer, candidateGridDimensionY));
     % Discard points in the background
@@ -269,7 +267,6 @@ for i=1:size(grid,1)
 end
 
 %% Plot Largrange strain E and infinitesimal rotation omega
-
 figure()
 colormap jet;
 tiledlayout(2,2);
